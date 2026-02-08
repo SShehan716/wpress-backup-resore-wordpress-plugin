@@ -30,6 +30,10 @@ $backup_dir = isset( $backup_dir ) ? $backup_dir : '';
 			<strong><?php esc_html_e( 'How long does restore take?', 'wpress-restore' ); ?></strong><br />
 			<?php echo esc_html( __( 'For a ~500MB backup, expect roughly 5–15 minutes. Do not close the tab until restore finishes. If it times out, try again or ask your host to raise PHP max_execution_time.', 'wpress-restore' ) ); ?>
 		</p>
+		<p style="margin-top: 10px;">
+			<strong><?php esc_html_e( 'White screen after restore?', 'wpress-restore' ); ?></strong>
+			<?php esc_html_e( 'Usually a plugin or theme from the backup causes a PHP error. Via FTP rename wp-content/plugins to wp-content/plugins_disabled to disable all plugins; if the site loads, enable plugins one by one to find the culprit. See readme for more.', 'wpress-restore' ); ?>
+		</p>
 	</div>
 
 	<!-- 1. Upload to backup folder -->

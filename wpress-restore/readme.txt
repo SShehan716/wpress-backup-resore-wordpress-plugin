@@ -49,6 +49,14 @@ Yes. WPress Restore reads the same .wpress format created by All-in-One WP Migra
 
 Upload the .wpress file via FTP or your host's file manager to a folder under WordPress (e.g. `wp-content/uploads`). Then use the "Restore from path" option and enter the full server path to the file.
 
+= White screen after restore? =
+
+A blank/white screen usually means a fatal PHP error (often from a restored plugin or theme). Try:
+
+1. **Disable plugins:** Via FTP or file manager, rename `wp-content/plugins` to `wp-content/plugins_disabled`. If the site loads, a plugin is the cause; rename back and enable plugins one by one to find which one.
+2. **Switch theme:** If the site still shows white with plugins disabled, rename `wp-content/themes/your-active-theme` to add `.bak` and WordPress will fall back to a default theme.
+3. **See the error:** In `wp-config.php` add before "That's all": `define('WP_DEBUG', true);` and `define('WP_DEBUG_LOG', true);`. Reload the page, then check `wp-content/debug.log` for the fatal error message.
+
 == Changelog ==
 
 = 1.0.0 =

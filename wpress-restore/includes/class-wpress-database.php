@@ -67,6 +67,32 @@ class WPress_Database {
 	}
 
 	/**
+	 * Prepare a single SQL statement for import: URL replace, table prefix replace, CREATE IF NOT EXISTS, INSERT IGNORE.
+	 *
+	 * @param string $statement Raw statement.
+	 * @param string $old_url   Old site URL.
+	 * @param string $new_url   New site URL.
+	 * @param string $old_home  Old home URL.
+	 * @param string $new_home  New home URL.
+	 * @return string
+	 */
+	protected static function prepare_import_statement( $statement, $old_url, $new_url, $old_home, $new_home ) {
+		global $wpdb;
+		$statement = str_replace( array( $old_url, $old_home ), array( $new_url, $new_home ), $statement );
+		// All-in-One WP Migration uses SERVMASK_PREFIX_ as placeholder; replace with current prefix.
+		$statement = str_replace( 'SERVMASK_PREFIX_', $wpdb->prefix, $statement );
+		// Avoid "Table already exists" when target DB has tables.
+		if ( preg_match( '/^\s*CREATE\s+TABLE\s/i', $statement ) ) {
+			$statement = preg_replace( '/^(\s*CREATE\s+TABLE)\s/i', '$1 IF NOT EXISTS ', $statement, 1 );
+		}
+		// Avoid "Duplicate entry for key PRIMARY" when re-running or target has data.
+		if ( preg_match( '/^\s*INSERT\s+INTO\s/i', $statement ) ) {
+			$statement = preg_replace( '/^(\s*INSERT)\s+INTO\s/i', '$1 IGNORE INTO ', $statement, 1 );
+		}
+		return $statement;
+	}
+
+	/**
 	 * Read first N bytes of file (for URL detection).
 	 *
 	 * @param string $path File path.
@@ -144,9 +170,15 @@ class WPress_Database {
 					}
 					if ( $c === $quote ) {
 						// MySQL: '' (two single quotes) is escaped single quote inside single-quoted string.
-						if ( $quote === "'" && $i + 1 < $len && $buffer[ $i + 1 ] === "'" ) {
-							$i += 2;
-							continue;
+						if ( $quote === "'" ) {
+							if ( $i + 1 < $len && $buffer[ $i + 1 ] === "'" ) {
+								$i += 2;
+								continue;
+							}
+							// At end of buffer we can't tell if this is '' or end-of-string; keep for next chunk.
+							if ( $i + 1 >= $len ) {
+								break;
+							}
 						}
 						$in_string = false;
 					}
@@ -159,16 +191,20 @@ class WPress_Database {
 					$i++;
 					continue;
 				}
+				// Only split on semicolon when it's followed by newline or end of buffer (avoids splitting inside long string values).
 				if ( $c === ';' ) {
-					$statement = trim( substr( $buffer, $start, $i - $start + 1 ) );
-					$start     = $i + 1;
-					if ( $statement !== '' && strpos( $statement, '--' ) !== 0 && strpos( $statement, '/*' ) !== 0 ) {
-						$statement = str_replace( array( $old_url, $old_home ), array( $new_url, $new_home ), $statement );
-						$result    = $wpdb->query( $statement );
-						if ( $result === false && ! empty( $wpdb->last_error ) ) {
-							$errors[] = $wpdb->last_error;
-						} else {
-							$run++;
+					$next_ok = ( $i + 1 >= $len || $buffer[ $i + 1 ] === "\n" || $buffer[ $i + 1 ] === "\r" );
+					if ( $next_ok ) {
+						$statement = trim( substr( $buffer, $start, $i - $start + 1 ) );
+						$start     = $i + 1;
+						if ( $statement !== '' && strpos( $statement, '--' ) !== 0 && strpos( $statement, '/*' ) !== 0 ) {
+							$statement = self::prepare_import_statement( $statement, $old_url, $new_url, $old_home, $new_home );
+							$result    = $wpdb->query( $statement );
+							if ( $result === false && ! empty( $wpdb->last_error ) ) {
+								$errors[] = $wpdb->last_error;
+							} else {
+								$run++;
+							}
 						}
 					}
 					$i++;
@@ -182,7 +218,7 @@ class WPress_Database {
 		fclose( $handle );
 
 		if ( trim( $buffer ) !== '' ) {
-			$statement = str_replace( array( $old_url, $old_home ), array( $new_url, $new_home ), trim( $buffer ) );
+			$statement = self::prepare_import_statement( trim( $buffer ), $old_url, $new_url, $old_home, $new_home );
 			if ( $statement !== '' && strpos( $statement, '--' ) !== 0 && strpos( $statement, '/*' ) !== 0 ) {
 				$wpdb->query( $statement );
 				$run++;
