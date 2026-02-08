@@ -1,0 +1,45 @@
+/**
+ * WPress Restore admin styles
+ */
+
+.wpress-restore-wrap {
+	max-width: 800px;
+}
+
+.wpress-restore-boxes {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 24px;
+	margin-top: 20px;
+}
+
+.wpress-restore-box {
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+	padding: 20px;
+	min-width: 320px;
+	flex: 1;
+}
+
+.wpress-restore-box h2 {
+	margin-top: 0;
+	padding-bottom: 10px;
+	border-bottom: 1px solid #eee;
+}
+
+.wpress-restore-box .description {
+	color: #646970;
+	font-size: 13px;
+	margin-top: 4px;
+}
+
+.wpress-restore-box input[type="text"],
+.wpress-restore-box input[type="url"] {
+	width: 100%;
+	max-width: 100%;
+}
+
+.wpress-restore-box .button {
+	margin-top: 8px;
+}
