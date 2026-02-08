@@ -147,15 +147,56 @@
 
 		var forms = wrap.querySelectorAll( 'form[action*="admin-post.php"]' );
 		forms.forEach( function ( form ) {
-			var isUpload = form.querySelector( 'input[type="file"][name="wpress_file"]' );
+			var fileInput = form.querySelector( 'input[type="file"][name="wpress_file"]' );
+			var pathInput = form.querySelector( 'input[name="wpress_path"]' );
 			form.addEventListener( 'submit', function ( e ) {
-				var action = form.querySelector( 'input[name="action"]' );
-				if ( ! action || ( action.value !== 'wpress_restore_path' && action.value !== 'wpress_restore_upload' ) ) {
+				var actionInput = form.querySelector( 'input[name="action"]' );
+				var action = actionInput ? actionInput.value : '';
+				var isStream = action === 'wpress_restore_stream' || action === 'wpress_restore_path' || action === 'wpress_restore_upload';
+				if ( ! isStream ) {
 					return;
 				}
 				e.preventDefault();
-				setFormDisabled( form, true );
+
+				if ( action === 'wpress_restore_stream' ) {
+					var selected = form.querySelector( 'input[name="selected_backup"]:checked' );
+					var pathVal = form.querySelector( 'input[name="wpress_path"]' );
+					if ( selected ) {
+						// Restore from backup list — no extra validation.
+					} else if ( pathVal && ( pathVal.value || '' ).trim() ) {
+						var path = ( pathVal.value || '' ).trim();
+						if ( path.indexOf( '/' ) !== 0 ) {
+							alert( 'The path must be the full server path starting with /.' );
+							pathVal.focus();
+							return;
+						}
+					} else if ( ! selected && ( ! pathVal || ! ( pathVal.value || '' ).trim() ) ) {
+						alert( 'Please select a backup from the list above.' );
+						return;
+					}
+				}
+
+				if ( fileInput ) {
+					if ( ! fileInput.files || fileInput.files.length === 0 ) {
+						alert( 'Please select a .wpress file to upload first.' );
+						return;
+					}
+				} else if ( pathInput && action !== 'wpress_restore_stream' ) {
+					var path = ( pathInput.value || '' ).trim();
+					if ( ! path ) {
+						alert( 'Please enter the full server path to your .wpress file.\n\nExample: /home/username/public_html/wp-content/uploads/2026/backup/yourfile.wpress' );
+						pathInput.focus();
+						return;
+					}
+					if ( path.indexOf( '/' ) !== 0 ) {
+						alert( 'The path must be the full server path starting with / (e.g. /home/username/...).' );
+						pathInput.focus();
+						return;
+					}
+				}
+
 				var formData = new FormData( form );
+				setFormDisabled( form, true );
 				runRestoreStream( form, formData, wrap );
 			});
 		});

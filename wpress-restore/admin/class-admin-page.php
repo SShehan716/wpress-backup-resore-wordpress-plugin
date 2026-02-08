@@ -23,6 +23,7 @@ class WPress_Restore_Admin_Page {
 	public static function init() {
 		add_action( 'admin_menu', array( __CLASS__, 'add_menu' ) );
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_assets' ) );
+		add_action( 'admin_post_wpress_restore_upload_to_backups', array( __CLASS__, 'handle_upload_to_backups' ) );
 		add_action( 'admin_post_wpress_restore_upload', array( __CLASS__, 'handle_upload' ) );
 		add_action( 'admin_post_wpress_restore_path', array( __CLASS__, 'handle_path' ) );
 		add_action( 'admin_post_wpress_restore_stream', array( __CLASS__, 'handle_stream' ) );
@@ -81,7 +82,46 @@ class WPress_Restore_Admin_Page {
 
 		$message = isset( $_GET['wpress_message'] ) ? sanitize_text_field( wp_unslash( $_GET['wpress_message'] ) ) : '';
 		$success = isset( $_GET['wpress_success'] ) && $_GET['wpress_success'] === '1';
+		$backups = WPress_Backup_Folder::list_backups();
+		$backup_dir = WPress_Backup_Folder::get_dir();
 		include WPRESS_RESTORE_PLUGIN_DIR . 'admin/views/form.php';
+	}
+
+	/**
+	 * Upload .wpress file to backup folder only (no restore). For large files, user can add via FTP to same folder.
+	 */
+	public static function handle_upload_to_backups() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have sufficient permissions.', 'wpress-restore' ) );
+		}
+		if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), self::NONCE_ACTION ) ) {
+			wp_safe_redirect( self::get_page_url( __( 'Invalid security token.', 'wpress-restore' ), false ) );
+			exit;
+		}
+
+		if ( empty( $_FILES['wpress_backup_file']['tmp_name'] ) || ! is_uploaded_file( $_FILES['wpress_backup_file']['tmp_name'] ) ) {
+			wp_safe_redirect( self::get_page_url( __( 'Please select a .wpress file to upload.', 'wpress-restore' ), false ) );
+			exit;
+		}
+
+		$name = sanitize_file_name( wp_unslash( $_FILES['wpress_backup_file']['name'] ?? '' ) );
+		if ( strtolower( substr( $name, -7 ) ) !== '.wpress' ) {
+			wp_safe_redirect( self::get_page_url( __( 'File must have .wpress extension.', 'wpress-restore' ), false ) );
+			exit;
+		}
+
+		$dir = WPress_Backup_Folder::get_dir();
+		if ( ! $dir ) {
+			wp_safe_redirect( self::get_page_url( __( 'Could not create backup folder.', 'wpress-restore' ), false ) );
+			exit;
+		}
+		$dest = $dir . '/' . $name;
+		if ( move_uploaded_file( $_FILES['wpress_backup_file']['tmp_name'], $dest ) ) {
+			wp_safe_redirect( self::get_page_url( __( 'Backup file uploaded. Select it from the list below and click Restore.', 'wpress-restore' ), true ) );
+		} else {
+			wp_safe_redirect( self::get_page_url( __( 'Failed to save uploaded file. Check folder permissions.', 'wpress-restore' ), false ) );
+		}
+		exit;
 	}
 
 	/**
@@ -171,7 +211,15 @@ class WPress_Restore_Admin_Page {
 		$old_url = isset( $_POST['old_url'] ) ? esc_url_raw( wp_unslash( $_POST['old_url'] ) ) : '';
 		$old_home = isset( $_POST['old_home'] ) ? esc_url_raw( wp_unslash( $_POST['old_home'] ) ) : '';
 
-		if ( ! empty( $_FILES['wpress_file']['tmp_name'] ) && is_uploaded_file( $_FILES['wpress_file']['tmp_name'] ) ) {
+		// Restore from backup list (no path typing).
+		$selected = isset( $_POST['selected_backup'] ) ? sanitize_file_name( wp_unslash( $_POST['selected_backup'] ) ) : '';
+		if ( $selected !== '' ) {
+			$path = WPress_Backup_Folder::get_path_for( $selected );
+			if ( ! $path ) {
+				echo 'ERROR:' . esc_html__( 'Invalid or missing backup file. Please select a file from the backup list.', 'wpress-restore' ) . "\n";
+				exit;
+			}
+		} elseif ( ! empty( $_FILES['wpress_file']['tmp_name'] ) && is_uploaded_file( $_FILES['wpress_file']['tmp_name'] ) ) {
 			$name = sanitize_file_name( wp_unslash( $_FILES['wpress_file']['name'] ?? '' ) );
 			if ( strtolower( substr( $name, -7 ) ) !== '.wpress' ) {
 				echo 'ERROR:' . esc_html__( 'File must have .wpress extension.', 'wpress-restore' ) . "\n";
@@ -193,11 +241,15 @@ class WPress_Restore_Admin_Page {
 				exit;
 			}
 		} else {
-			$path = isset( $_POST['wpress_path'] ) ? sanitize_text_field( wp_unslash( $_POST['wpress_path'] ) ) : '';
+			$path = isset( $_POST['wpress_path'] ) ? trim( sanitize_text_field( wp_unslash( $_POST['wpress_path'] ) ) ) : '';
+			if ( $path !== '' && strpos( $path, '/' ) !== 0 ) {
+				echo 'ERROR:' . esc_html__( 'Custom path must start with /. Or select a file from the backup list above.', 'wpress-restore' ) . "\n";
+				exit;
+			}
 		}
 
 		if ( empty( $path ) ) {
-			echo 'ERROR:' . esc_html__( 'Please provide a .wpress file (upload or path).', 'wpress-restore' ) . "\n";
+			echo 'ERROR:' . esc_html__( 'Please select a backup from the list above, or upload a file first.', 'wpress-restore' ) . "\n";
 			exit;
 		}
 

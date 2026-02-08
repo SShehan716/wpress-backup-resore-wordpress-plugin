@@ -22,6 +22,7 @@ define( 'WPRESS_RESTORE_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
 
 require_once WPRESS_RESTORE_PLUGIN_DIR . 'includes/class-wpress-extractor.php';
 require_once WPRESS_RESTORE_PLUGIN_DIR . 'includes/class-wpress-database.php';
+require_once WPRESS_RESTORE_PLUGIN_DIR . 'includes/class-wpress-backup-folder.php';
 require_once WPRESS_RESTORE_PLUGIN_DIR . 'includes/class-wpress-restore.php';
 
 if ( is_admin() ) {
