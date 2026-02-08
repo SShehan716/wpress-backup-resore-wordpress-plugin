@@ -17,12 +17,13 @@ class WPress_Restore {
 	/**
 	 * Run full restore from a .wpress file path.
 	 *
-	 * @param string $wpress_path Full path to .wpress file.
-	 * @param string $old_url     Optional. Old site URL for search-replace.
-	 * @param string $old_home    Optional. Old home URL for search-replace.
+	 * @param string   $wpress_path Full path to .wpress file.
+	 * @param string   $old_url     Optional. Old site URL for search-replace.
+	 * @param string   $old_home    Optional. Old home URL for search-replace.
+	 * @param callable $progress   Optional. Callback( string $step, string $message ) for live status.
 	 * @return array{ 'success': bool, 'message': string, 'step': string }
 	 */
-	public static function run( $wpress_path, $old_url = '', $old_home = '' ) {
+	public static function run( $wpress_path, $old_url = '', $old_home = '', $progress = null ) {
 		$wpress_path = self::sanitize_wpress_path( $wpress_path );
 		if ( ! $wpress_path || ! is_file( $wpress_path ) ) {
 			return array(
@@ -32,6 +33,8 @@ class WPress_Restore {
 			);
 		}
 
+		$notify = is_callable( $progress ) ? $progress : function() {};
+
 		// Raise limits for restore.
 		$prev_time  = @ini_get( 'max_execution_time' );
 		$prev_mem   = @ini_get( 'memory_limit' );
@@ -40,6 +43,7 @@ class WPress_Restore {
 			@ini_set( 'memory_limit', '1024M' );
 		}
 
+		$notify( 'extract', __( 'Creating temp directory…', 'wpress-restore' ) );
 		$extract_dir = self::get_temp_extract_dir();
 		if ( ! $extract_dir ) {
 			return array(
@@ -49,6 +53,7 @@ class WPress_Restore {
 			);
 		}
 
+		$notify( 'extract', __( 'Extracting archive (this may take several minutes)…', 'wpress-restore' ) );
 		$extractor = new WPress_Extractor( $wpress_path );
 		if ( ! $extractor->is_valid() ) {
 			self::rmdir_recursive( $extract_dir );
@@ -73,6 +78,7 @@ class WPress_Restore {
 
 		$database_sql = self::find_database_sql( $extract_dir );
 		if ( $database_sql ) {
+			$notify( 'database', __( 'Importing database…', 'wpress-restore' ) );
 			$import_result = WPress_Database::import_sql( $database_sql, $old_url, site_url(), $old_home, home_url() );
 			if ( ! $import_result['success'] ) {
 				self::rmdir_recursive( $extract_dir );
@@ -84,8 +90,11 @@ class WPress_Restore {
 					'step'    => 'database',
 				);
 			}
+		} else {
+			$notify( 'database', __( 'No database.sql found in archive, skipping.', 'wpress-restore' ) );
 		}
 
+		$notify( 'files', __( 'Copying files to WordPress…', 'wpress-restore' ) );
 		$copy_result = self::copy_extracted_files_to_wp( $extract_dir );
 		if ( ! $copy_result['success'] ) {
 			self::rmdir_recursive( $extract_dir );
@@ -98,12 +107,14 @@ class WPress_Restore {
 			);
 		}
 
+		$notify( 'cleanup', __( 'Cleaning up temporary files…', 'wpress-restore' ) );
 		self::rmdir_recursive( $extract_dir );
 		flush_rewrite_rules();
 
 		@set_time_limit( $prev_time ?: 30 );
 		@ini_set( 'memory_limit', $prev_mem );
 
+		$notify( 'done', __( 'Restore completed.', 'wpress-restore' ) );
 		return array(
 			'success' => true,
 			'message' => __( 'Restore completed successfully. Please go to Settings → Permalinks and click Save to refresh permalinks.', 'wpress-restore' ),

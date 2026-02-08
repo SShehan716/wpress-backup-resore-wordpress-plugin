@@ -25,6 +25,7 @@ class WPress_Restore_Admin_Page {
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_assets' ) );
 		add_action( 'admin_post_wpress_restore_upload', array( __CLASS__, 'handle_upload' ) );
 		add_action( 'admin_post_wpress_restore_path', array( __CLASS__, 'handle_path' ) );
+		add_action( 'admin_post_wpress_restore_stream', array( __CLASS__, 'handle_stream' ) );
 	}
 
 	/**
@@ -56,6 +57,18 @@ class WPress_Restore_Admin_Page {
 			array(),
 			WPRESS_RESTORE_VERSION
 		);
+		wp_enqueue_script(
+			'wpress-restore-admin',
+			$plugin_url . 'assets/js/admin.js',
+			array(),
+			WPRESS_RESTORE_VERSION,
+			true
+		);
+		wp_localize_script( 'wpress-restore-admin', 'wpressRestore', array(
+			'streamUrl'   => admin_url( 'admin-post.php' ),
+			'nonce'       => wp_create_nonce( self::NONCE_ACTION ),
+			'redirectUrl' => add_query_arg( 'page', self::SLUG, admin_url( 'tools.php' ) ),
+		) );
 	}
 
 	/**
@@ -136,6 +149,89 @@ class WPress_Restore_Admin_Page {
 
 		$result = WPress_Restore::run( $path, $old_url, $old_home );
 		wp_safe_redirect( self::get_page_url( $result['message'], $result['success'] ) );
+		exit;
+	}
+
+	/**
+	 * Handle streaming restore: run restore and stream progress lines (STEP:message, DONE:message, ERROR:message).
+	 */
+	public static function handle_stream() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			status_header( 403 );
+			echo 'ERROR:' . esc_html__( 'You do not have sufficient permissions.', 'wpress-restore' ) . "\n";
+			exit;
+		}
+		if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), self::NONCE_ACTION ) ) {
+			status_header( 403 );
+			echo 'ERROR:' . esc_html__( 'Invalid security token.', 'wpress-restore' ) . "\n";
+			exit;
+		}
+
+		$path    = '';
+		$old_url = isset( $_POST['old_url'] ) ? esc_url_raw( wp_unslash( $_POST['old_url'] ) ) : '';
+		$old_home = isset( $_POST['old_home'] ) ? esc_url_raw( wp_unslash( $_POST['old_home'] ) ) : '';
+
+		if ( ! empty( $_FILES['wpress_file']['tmp_name'] ) && is_uploaded_file( $_FILES['wpress_file']['tmp_name'] ) ) {
+			$name = sanitize_file_name( wp_unslash( $_FILES['wpress_file']['name'] ?? '' ) );
+			if ( strtolower( substr( $name, -7 ) ) !== '.wpress' ) {
+				echo 'ERROR:' . esc_html__( 'File must have .wpress extension.', 'wpress-restore' ) . "\n";
+				exit;
+			}
+			$upload_dir = wp_upload_dir();
+			if ( ! empty( $upload_dir['error'] ) ) {
+				echo 'ERROR:' . esc_html__( 'Upload directory is not writable.', 'wpress-restore' ) . "\n";
+				exit;
+			}
+			$dir = $upload_dir['basedir'] . '/wpress-restore-uploads';
+			if ( ! wp_mkdir_p( $dir ) ) {
+				echo 'ERROR:' . esc_html__( 'Could not create upload directory.', 'wpress-restore' ) . "\n";
+				exit;
+			}
+			$path = $dir . '/' . $name;
+			if ( ! move_uploaded_file( $_FILES['wpress_file']['tmp_name'], $path ) ) {
+				echo 'ERROR:' . esc_html__( 'Failed to save uploaded file.', 'wpress-restore' ) . "\n";
+				exit;
+			}
+		} else {
+			$path = isset( $_POST['wpress_path'] ) ? sanitize_text_field( wp_unslash( $_POST['wpress_path'] ) ) : '';
+		}
+
+		if ( empty( $path ) ) {
+			echo 'ERROR:' . esc_html__( 'Please provide a .wpress file (upload or path).', 'wpress-restore' ) . "\n";
+			exit;
+		}
+
+		// Stream progress as plain text (one line per event: STEP:message or DONE:message or ERROR:message).
+		@ini_set( 'output_buffering', 'off' );
+		@ini_set( 'zlib.output_compression', false );
+		if ( function_exists( 'apache_setenv' ) ) {
+			@apache_setenv( 'no-gzip', '1' );
+		}
+		header( 'Content-Type: text/plain; charset=utf-8' );
+		header( 'X-Accel-Buffering: no' );
+		header( 'Cache-Control: no-cache' );
+		if ( ob_get_level() ) {
+			ob_end_flush();
+		}
+
+		$progress = function( $step, $message ) {
+			echo 'STEP:' . $step . ':' . $message . "\n";
+			if ( ob_get_level() ) {
+				ob_flush();
+			}
+			flush();
+		};
+
+		$result = WPress_Restore::run( $path, $old_url, $old_home, $progress );
+		if ( $result['success'] ) {
+			echo 'DONE:' . $result['message'] . "\n";
+		} else {
+			echo 'ERROR:' . $result['message'] . "\n";
+		}
+		if ( ob_get_level() ) {
+			ob_flush();
+		}
+		flush();
 		exit;
 	}
 

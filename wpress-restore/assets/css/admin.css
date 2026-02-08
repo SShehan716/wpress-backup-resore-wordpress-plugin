@@ -43,3 +43,51 @@
 .wpress-restore-box .button {
 	margin-top: 8px;
 }
+
+/* Live status during restore */
+.wpress-restore-status {
+	background: #f0f0f1;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	padding: 16px 20px;
+	margin: 20px 0;
+	max-height: 320px;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+
+.wpress-restore-status-current {
+	font-weight: 600;
+	margin-bottom: 10px;
+	color: #1d2327;
+}
+
+.wpress-restore-status-current.active {
+	color: #2271b1;
+}
+
+.wpress-restore-status-current.done {
+	color: #00a32a;
+}
+
+.wpress-restore-status-current.error {
+	color: #d63638;
+}
+
+.wpress-restore-status-log {
+	margin: 0;
+	padding-left: 20px;
+	font-size: 13px;
+	color: #50575e;
+	overflow-y: auto;
+	max-height: 240px;
+}
+
+.wpress-restore-status-log li.done {
+	color: #00a32a;
+}
+
+.wpress-restore-status-log li.error {
+	color: #d63638;
+}
