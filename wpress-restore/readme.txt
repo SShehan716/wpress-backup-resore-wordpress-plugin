@@ -22,6 +22,7 @@ WPress Restore allows you to restore a full WordPress site from a `.wpress` back
 * Copy wp-content (themes, plugins, uploads) into your WordPress installation
 * Optional manual old URL / home URL for search-replace
 * Skips overwriting wp-config.php and the WPress Restore plugin itself
+* Full restore: database, uploads, themes, and plugins are all replaced with the backup (theme and plugins from the backup become active)
 
 **Usage:**
 
