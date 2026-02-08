@@ -31,6 +31,10 @@ $backup_dir = isset( $backup_dir ) ? $backup_dir : '';
 			<?php echo esc_html( __( 'For a ~500MB backup, expect roughly 5–15 minutes. Do not close the tab until restore finishes. If it times out, try again or ask your host to raise PHP max_execution_time.', 'wpress-restore' ) ); ?>
 		</p>
 		<p style="margin-top: 10px;">
+			<strong><?php esc_html_e( 'Request failed: 504 or Gateway Timeout?', 'wpress-restore' ); ?></strong><br />
+			<?php esc_html_e( 'The server closed the connection before the restore finished. Try: (1) Use "Restore without progress" below — one long request that some hosts allow; (2) Increase gateway/proxy timeout in your host control panel or Cloudflare; (3) Use a smaller backup or run restore via WP-CLI.', 'wpress-restore' ); ?>
+		</p>
+		<p style="margin-top: 10px;">
 			<strong><?php esc_html_e( 'White screen after restore?', 'wpress-restore' ); ?></strong>
 			<?php esc_html_e( 'Usually a plugin or theme from the backup causes a PHP error. Via FTP rename wp-content/plugins to wp-content/plugins_disabled to disable all plugins; if the site loads, enable plugins one by one to find the culprit. See readme for more.', 'wpress-restore' ); ?>
 		</p>
@@ -103,6 +107,7 @@ $backup_dir = isset( $backup_dir ) ? $backup_dir : '';
 				</p>
 				<p style="margin-top: 12px;">
 					<button type="submit" class="button button-primary button-hero" id="wpress-restore-selected-btn"><?php esc_html_e( 'Restore selected backup', 'wpress-restore' ); ?></button>
+					<button type="submit" name="wpress_direct" value="1" class="button button-hero" style="margin-left: 8px;"><?php esc_html_e( 'Restore without progress (try if you get 504)', 'wpress-restore' ); ?></button>
 				</p>
 			</form>
 		<?php endif; ?>
@@ -123,6 +128,7 @@ $backup_dir = isset( $backup_dir ) ? $backup_dir : '';
 			</p>
 			<p>
 				<button type="submit" class="button"><?php esc_html_e( 'Restore from path', 'wpress-restore' ); ?></button>
+				<button type="submit" name="wpress_direct" value="1" class="button" style="margin-left: 8px;"><?php esc_html_e( 'Restore without progress (try if you get 504)', 'wpress-restore' ); ?></button>
 			</p>
 		</form>
 	</details>

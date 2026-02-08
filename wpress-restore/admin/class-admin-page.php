@@ -27,6 +27,7 @@ class WPress_Restore_Admin_Page {
 		add_action( 'admin_post_wpress_restore_upload', array( __CLASS__, 'handle_upload' ) );
 		add_action( 'admin_post_wpress_restore_path', array( __CLASS__, 'handle_path' ) );
 		add_action( 'admin_post_wpress_restore_stream', array( __CLASS__, 'handle_stream' ) );
+		add_action( 'admin_post_wpress_restore_direct', array( __CLASS__, 'handle_direct' ) );
 	}
 
 	/**
@@ -284,6 +285,48 @@ class WPress_Restore_Admin_Page {
 			ob_flush();
 		}
 		flush();
+		exit;
+	}
+
+	/**
+	 * Handle direct restore (no streaming): run restore in one request and redirect.
+	 * Use this if streaming restore returns 504 Gateway Timeout.
+	 */
+	public static function handle_direct() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have sufficient permissions.', 'wpress-restore' ) );
+		}
+		if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), self::NONCE_ACTION ) ) {
+			wp_safe_redirect( self::get_page_url( __( 'Invalid security token.', 'wpress-restore' ), false ) );
+			exit;
+		}
+
+		$path    = '';
+		$old_url = isset( $_POST['old_url'] ) ? esc_url_raw( wp_unslash( $_POST['old_url'] ) ) : '';
+		$old_home = isset( $_POST['old_home'] ) ? esc_url_raw( wp_unslash( $_POST['old_home'] ) ) : '';
+
+		$selected = isset( $_POST['selected_backup'] ) ? sanitize_file_name( wp_unslash( $_POST['selected_backup'] ) ) : '';
+		if ( $selected !== '' ) {
+			$path = WPress_Backup_Folder::get_path_for( $selected );
+			if ( ! $path ) {
+				wp_safe_redirect( self::get_page_url( __( 'Invalid or missing backup file. Please select a file from the backup list.', 'wpress-restore' ), false ) );
+				exit;
+			}
+		} else {
+			$path = isset( $_POST['wpress_path'] ) ? trim( sanitize_text_field( wp_unslash( $_POST['wpress_path'] ) ) ) : '';
+			if ( $path !== '' && strpos( $path, '/' ) !== 0 ) {
+				wp_safe_redirect( self::get_page_url( __( 'Custom path must start with /. Or select a file from the backup list.', 'wpress-restore' ), false ) );
+				exit;
+			}
+		}
+
+		if ( empty( $path ) ) {
+			wp_safe_redirect( self::get_page_url( __( 'Please select a backup from the list above, or enter a path.', 'wpress-restore' ), false ) );
+			exit;
+		}
+
+		$result = WPress_Restore::run( $path, $old_url, $old_home );
+		wp_safe_redirect( self::get_page_url( $result['message'], $result['success'] ) );
 		exit;
 	}
 

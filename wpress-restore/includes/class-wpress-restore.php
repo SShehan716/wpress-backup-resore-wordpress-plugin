@@ -200,13 +200,43 @@ class WPress_Restore {
 	 */
 	protected static function copy_extracted_files_to_wp( $extract_dir ) {
 		$abs            = wp_normalize_path( ABSPATH );
-		$plugin_dir     = wp_normalize_path( rtrim( WPRESS_RESTORE_PLUGIN_DIR, '/\\' ) );
+		$plugin_dir_raw = rtrim( WPRESS_RESTORE_PLUGIN_DIR, '/\\' );
+		$plugin_dir     = wp_normalize_path( ( realpath( $plugin_dir_raw ) ?: $plugin_dir_raw ) );
+		$plugin_slug    = basename( $plugin_dir_raw );
 		$skip_config   = $abs . 'wp-config.php';
 		$wp_content_ext = $extract_dir . DIRECTORY_SEPARATOR . 'wp-content';
 		$wp_content_abs = $abs . 'wp-content';
 
 		if ( ! is_dir( $wp_content_ext ) ) {
 			return array( 'success' => true, 'message' => '' );
+		}
+
+		// Remove existing wp-content subdirs that exist in the backup so backup fully replaces them.
+		// For each top-level dir in extracted wp-content, clear the live counterpart (plugins: keep this plugin).
+		$top_level = array_diff( scandir( $wp_content_ext ), array( '.', '..' ) );
+		$sep = DIRECTORY_SEPARATOR;
+		foreach ( $top_level as $name ) {
+			$ext_path = $wp_content_ext . $sep . $name;
+			if ( ! is_dir( $ext_path ) ) {
+				continue;
+			}
+			$live_path = $wp_content_abs . $sep . $name;
+			if ( ! is_dir( $live_path ) ) {
+				continue;
+			}
+			$entries = array_diff( scandir( $live_path ), array( '.', '..' ) );
+			foreach ( $entries as $entry ) {
+				$path = $live_path . $sep . $entry;
+				$path_norm = wp_normalize_path( realpath( $path ) ?: $path );
+				if ( $name === 'plugins' && strpos( $path_norm . $sep, $plugin_dir . $sep ) === 0 ) {
+					continue;
+				}
+				if ( is_dir( $path ) || is_link( $path ) ) {
+					self::rmdir_recursive( $path );
+				} else {
+					@unlink( $path );
+				}
+			}
 		}
 
 		$iterator = new RecursiveIteratorIterator(
@@ -219,8 +249,8 @@ class WPress_Restore {
 			$relative = str_replace( '\\', '/', $relative );
 			$target   = $wp_content_abs . '/' . $relative;
 
-			$target_norm = wp_normalize_path( $target );
-			if ( strpos( $target_norm, $plugin_dir ) === 0 ) {
+			// Skip copying into our plugin folder (symlink-safe: use relative path).
+			if ( strpos( $relative, 'plugins/' . $plugin_slug . '/' ) === 0 || $relative === 'plugins/' . $plugin_slug ) {
 				continue;
 			}
 

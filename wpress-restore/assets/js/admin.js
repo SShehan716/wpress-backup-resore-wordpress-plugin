@@ -152,6 +152,13 @@
 			form.addEventListener( 'submit', function ( e ) {
 				var actionInput = form.querySelector( 'input[name="action"]' );
 				var action = actionInput ? actionInput.value : '';
+				// Direct restore (no progress): let form submit normally to avoid 504.
+				if ( e.submitter && e.submitter.name === 'wpress_direct' ) {
+					if ( actionInput ) {
+						actionInput.value = 'wpress_restore_direct';
+					}
+					return;
+				}
 				var isStream = action === 'wpress_restore_stream' || action === 'wpress_restore_path' || action === 'wpress_restore_upload';
 				if ( ! isStream ) {
 					return;
