@@ -143,6 +143,11 @@ class WPress_Database {
 						continue;
 					}
 					if ( $c === $quote ) {
+						// MySQL: '' (two single quotes) is escaped single quote inside single-quoted string.
+						if ( $quote === "'" && $i + 1 < $len && $buffer[ $i + 1 ] === "'" ) {
+							$i += 2;
+							continue;
+						}
 						$in_string = false;
 					}
 					$i++;
